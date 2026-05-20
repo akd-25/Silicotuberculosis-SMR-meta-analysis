@@ -1,0 +1,91 @@
+require(dplyr)
+require(ggplot2)
+require(readxl)
+require(tidyverse)
+require(ggpubr)
+
+setwd("~/Library/CloudStorage/OneDrive-ImperialCollegeLondon/PhD/BSc 2025")
+
+
+# 1. Data frame -----------------------------------------------------------
+tb_outcomes <- read_excel("tb_outcomes.xlsx")
+
+glimpse(tb_outcomes)
+
+# Remove col Relapse
+tb_outcomes <- tb_outcomes %>%
+  select(-Relapse)
+
+head(tb_outcomes)
+
+# Convert to long format and calculate percentages
+tb_outcomes_long <- tb_outcomes %>%
+  pivot_longer(
+    cols = -c(`Study group`, Group, Year),
+    names_to = "outcome",
+    values_to = "prop"
+  ) %>%
+  filter(!is.na(prop)) %>%
+  mutate(percent = prop * 100)
+
+table(tb_outcomes_long$outcome)
+
+tb_outcomes_long$outcome <- factor(
+  tb_outcomes_long$outcome,
+  levels = c("Not evaluated", "Unfavourable", "Lost to follow-up", "Died", "Failure", "Success")
+)
+print(tb_outcomes_long, n = 100)
+
+# 2. Plot (stacked horizontal bar) ---------------------------------------
+
+study_order <- tb_outcomes_long %>%
+  distinct(`Study group`, Year) %>%
+  arrange(-Year) %>%
+  pull(`Study group`)
+
+tb_outcomes_long <- tb_outcomes_long %>%
+  mutate(`Study group` = factor(`Study group`, levels = study_order))
+
+ggplot(tb_outcomes_long, aes(x = `Study group`, y = percent, fill = outcome)) +
+  geom_col(width = 0.6, colour = "white") +
+  geom_hline(
+    yintercept = 88,
+    linetype = "dashed",
+    colour = "grey50",
+    linewidth = 0.5
+  ) + 
+  coord_flip() +
+  scale_fill_manual(
+    values = c(
+      "Success" = "#009E73",  # green
+      "Failure"           = "#D55E00",  # red-orange
+      "Died"              = "#E69F00",  # orange
+      "Lost to follow-up" = "#F0E442",  # yellow
+      "Unfavourable"         = "#CC79A7",  # pink
+      "Not evaluated"     = "grey80"
+    )
+  ) +
+  labs(x = NULL, y = "Percentage of cohort") +
+  theme(
+    legend.title = element_blank(),
+    axis.text.y = element_text(size = 10),
+    panel.grid.major.y = element_blank(), 
+    legend.position = "bottom",
+  )+
+  guides(fill = guide_legend(reverse = TRUE)) + 
+  facet_grid(Group ~ ., scales = "free_y", space = "free_y", drop = TRUE) + 
+  theme_pubr(
+    base_size = 14,
+    border = TRUE,
+    legend = "bottom"
+  )
+ggsave("tb_treatment_outcomes.png", width = 10, height = 8, dpi = 300)
+
+
+x <- subset(tb_outcomes, Group == "Silica exposed")
+plot(x$Year, x$Success)
+cor(x$Year, x$Success, use = "everything")
+table(tb_outcomes$Group)
+x <- subset(tb_outcomes, Group == "Silicosis")
+plot(x$Year, x$Success)
+cor(x$Year, x$Success, use = "everything")
